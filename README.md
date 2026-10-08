@@ -2,7 +2,7 @@
 
 Administración Avanzada de Redes y Servidores - UNNOBA - Actividad N°3: *Aplicaciones en la Nube*
 
-**Autor:** _(completar con nombre y apellido)_
+Milton Ibarzabal
 
 Ranking online de puntajes para los juegos Doom y Pac-Man de GameCloud, implementado como una arquitectura **serverless** sobre [MiniStack](https://github.com/ministackorg/ministack) (emulador local de AWS). Se usan las mismas herramientas (AWS CLI) que contra una cuenta real.
 
