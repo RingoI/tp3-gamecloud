@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GameCloud Ranking</title>
+<style>
+  :root{--bg:#0d1526;--card:#1c2638;--borde:#2c3a52;--naranja:#ff9800;--texto:#e8edf5;--suave:#8fa3c0}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--texto);font-family:system-ui,Segoe UI,sans-serif}
+  main{max-width:1100px;margin:0 auto;padding:32px 20px}
+  h1{margin:0;font-size:2rem}
+  .sub{color:var(--suave);margin:4px 0 24px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--borde);border-radius:12px;padding:18px 20px}
+  .card h2{margin:0 0 10px;color:var(--naranja);font-size:1.2rem}
+  table{width:100%;border-collapse:collapse}
+  td{padding:5px 4px;border-bottom:1px solid var(--borde)}
+  td:first-child{width:32px;color:var(--suave)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.vacio{color:var(--suave);text-align:center}
+  .fila{display:flex;gap:10px;flex-wrap:wrap}
+  input,select{background:var(--bg);color:var(--texto);border:1px solid var(--borde);border-radius:8px;padding:10px;font-size:1rem}
+  input{flex:1;min-width:140px}
+  button{background:var(--naranja);border:0;border-radius:8px;padding:10px 18px;font-weight:700;font-size:1rem;cursor:pointer}
+  #msg{margin:10px 0 0;min-height:1.3em}
+  #msg.error{color:#ff6b6b} #msg.ok{color:#5fd68a}
+</style>
+</head>
+<body>
+<main>
+  <h1>GameCloud Ranking</h1>
+  <p class="sub">Frontend en S3 · API Gateway + Lambda · SQS · DynamoDB</p>
+
+  <div class="grid">
+    <section class="card" id="doom"><h2>Doom</h2>
+      <table><tbody></tbody></table></section>
+    <section class="card" id="pacman"><h2>Pac-Man</h2>
+      <table><tbody></tbody></table></section>
+  </div>
+
+  <section class="card">
+    <h2>Cargar un puntaje</h2>
+    <form id="form" class="fila">
+      <input id="jugador" placeholder="Jugador" maxlength="50" required>
+      <select id="juego">
+        <option value="doom">Doom</option>
+        <option value="pacman">Pac-Man</option>
+      </select>
+      <input id="puntaje" type="number" min="0" step="1" placeholder="Puntaje" required>
+      <button type="submit">Enviar</button>
+    </form>
+    <p id="msg"></p>
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script>
+  const API = window.GAMECLOUD_API;
+  const JUEGOS = ["doom", "pacman"];
+  const msg = document.getElementById("msg");
+
+  function mensaje(texto, tipo) {
+    msg.textContent = texto;
+    msg.className = tipo || "";
+  }
+
+  function pintar(juego, filas) {
+    const cuerpo = document.querySelector("#" + juego + " tbody");
+    cuerpo.replaceChildren();
+    if (!filas.length) {
+      const td = cuerpo.insertRow().insertCell();
+      td.colSpan = 3;
+      td.className = "vacio";
+      td.textContent = "Sin puntajes todavía";
+      return;
+    }
+    filas.forEach((f, i) => {
+      const tr = cuerpo.insertRow();
+      tr.insertCell().textContent = i + 1;
+      tr.insertCell().textContent = f.jugador;
+      const p = tr.insertCell();
+      p.className = "num";
+      p.textContent = Number(f.puntaje).toLocaleString("es-AR");
+    });
+  }
+
+  async function cargar() {
+    try {
+      if (!API) throw new Error("config.js no definió GAMECLOUD_API");
+      const r = await fetch(API + "/ranking");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const datos = await r.json();
+      JUEGOS.forEach(j => pintar(j, datos[j] || []));
+      if (msg.className === "error") mensaje("");
+    } catch (e) {
+      console.error(e);
+      mensaje("No se pudo consultar la API", "error");
+    }
+  }
+
+  document.getElementById("form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const jugador = document.getElementById("jugador").value.trim();
+    const juego = document.getElementById("juego").value;
+    const puntaje = parseInt(document.getElementById("puntaje").value, 10);
+    if (!jugador || Number.isNaN(puntaje) || puntaje < 0) {
+      mensaje("Completá el jugador y un puntaje entero válido", "error");
+      return;
+    }
+    try {
+      const r = await fetch(API + "/scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jugador: jugador, juego: juego, puntaje: puntaje })
+      });
+      if (r.status === 202) {
+        mensaje("Puntaje enviado (202). Se procesa en segundo plano...", "ok");
+        ev.target.reset();
+        setTimeout(cargar, 3000);
+      } else {
+        const d = await r.json().catch(() => ({}));
+        mensaje("Error " + r.status + ": " + (d.error || "no se pudo enviar"), "error");
+      }
+    } catch (e) {
+      console.error(e);
+      mensaje("No se pudo enviar el puntaje", "error");
+    }
+  });
+
+  cargar();
+  setInterval(cargar, 15000);
+</script>
+</body>
+</html>
